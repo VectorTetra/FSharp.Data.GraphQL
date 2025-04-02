@@ -138,21 +138,10 @@ module ObjectListFilter =
         let whereMethod = genericWhereMethod.MakeGenericMethod ([| typeof<'T> |])
         Expression.Call (whereMethod, [| query.Expression; Expression.Lambda<Func<'T, bool>> (predicate, param) |])
 
-    let private StringStartsWithMethod = typeof<string>.GetMethod ("StartsWith", [| typeof<string> |])
-    let private StringEndsWithMethod = typeof<string>.GetMethod ("EndsWith", [| typeof<string> |])
-    let private StringContainsMethod = typeof<string>.GetMethod ("Contains", [| typeof<string> |])
-    let private MemberStartsWithMethod (memberType : Type) =
-        match memberType.GetMethod ("StartsWith", [| memberType |]) with
-        | null -> raise (MissingMemberException $"Method 'StartsWith' not found on '{memberType.FullName}'")
-        | method -> method
-    let private MemberEndsWithMethod (memberType : Type) =
-        match memberType.GetMethod ("EndsWith", [| memberType |]) with
-        | null -> raise (MissingMemberException $"Method 'EndsWith' not found on '{memberType.FullName}'")
-        | method -> method
-    let private MemberContainsMethod (memberType : Type) =
-        match memberType.GetMethod ("Contains", [| memberType |]) with
-        | null -> raise (MissingMemberException $"Method 'Contains' not found on '{memberType.FullName}'")
-        | method -> method
+    let private stringType = typeof<string>
+    let private StringStartsWithMethod = stringType.GetMethod ("StartsWith", [| stringType |])
+    let private StringEndsWithMethod = stringType.GetMethod ("EndsWith", [| stringType |])
+    let private StringContainsMethod = stringType.GetMethod ("Contains", [| stringType |])
     let private getEnumerableContainsMethod (memberType : Type) =
         match
             typeof<Enumerable>
@@ -197,20 +186,20 @@ module ObjectListFilter =
         | LessThanOrEqual f -> Expression.LessThanOrEqual (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
         | StartsWith f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            if ``member``.Type = typeof<string> then
+            if ``member``.Type = stringType then
                 Expression.Call (``member``, StringStartsWithMethod, Expression.Constant (f.Value))
             else
-                Expression.Call (``member``, MemberStartsWithMethod ``member``.Type, Expression.Constant (f.Value))
+                Expression.Call (Expression.Convert (``member``, stringType), StringStartsWithMethod, Expression.Constant (f.Value))
         | EndsWith f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            if ``member``.Type = typeof<string> then
+            if ``member``.Type = stringType then
                 Expression.Call (``member``, StringEndsWithMethod, Expression.Constant (f.Value))
             else
-                Expression.Call (``member``, MemberEndsWithMethod ``member``.Type, Expression.Constant (f.Value))
+                Expression.Call (Expression.Convert (``member``, stringType), StringEndsWithMethod, Expression.Constant (f.Value))
         | Contains f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             let isEnumerable (memberType : Type) =
-                not (Type.(=) (memberType, typeof<string>))
+                not (Type.(=) (memberType, stringType))
                 && typeof<System.Collections.IEnumerable>.IsAssignableFrom (memberType)
                 && memberType
                     .GetInterfaces()
@@ -237,10 +226,10 @@ module ObjectListFilter =
                     Expression.Constant (f.Value)
                 )
             | _ ->
-                if ``member``.Type = typeof<string> then
+                if ``member``.Type = stringType then
                     Expression.Call (``member``, StringContainsMethod, Expression.Constant (f.Value))
                 else
-                    Expression.Call (``member``, MemberContainsMethod ``member``.Type, Expression.Constant (f.Value))
+                    Expression.Call (Expression.Convert (``member``, stringType), StringContainsMethod, Expression.Constant (f.Value))
         | In f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             f.Value
